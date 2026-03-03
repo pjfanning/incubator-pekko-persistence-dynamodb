@@ -1,44 +1,26 @@
-Changelog
-=========
+# Apache Pekko Persistence DynamoDB Releases
 
-v 1.3.0
---------------------
+## v1.1.0
 
-* Implementation of Akka Persistence Query. Thanks [Joost de Vries](https://github.com/joost-de-vries)!
-  See (Configuration)[#read-journal-akka-persistence-query) for required setup.
+### Changes
 
-v 1.1.2 (v 1.2.0)
-----------------------------
+* We have made some minor dependency upgrades, notably the AWS libs (latest available [AWS SDK for Java 1.x](https://github.com/aws/aws-sdk-java) lib at release time, October 2024).
+* Built with Pekko 1.1.x. With this release, it is recommended to use the latest Pekko 1.1.x libs but in theory, the 1.0.x libs should work too.
+* Retry on 50x responses from AWS. (#11) 
+* Add `setSelect(ALL_ATTRIBUTES)` to retrieve snapshots. (#12)
+* Protect against doing requests for snapshots that are over 400KB. (#13)
 
-This was supposed to be released as `v1.2.0` but was released as `v1.1.2` to maven. Sorry about that!
+## v1.0.0
 
-* Use DynamoDB Query during journal replay - https://github.com/akka/akka-persistence-dynamodb/issues/106
-* Correct issue [#98](https://github.com/akka/akka-persistence-dynamodb/issues/98)
-  Please see [fixes in `reference.conf`](blob/master/src/main/resources/reference.conf) for a workaround for systems impacted by this issues.
-* Depends on Akka 2.5.
-* Adds Support for the Async Serializers - which enables the use of the plugin with Lightbend extensions [GDPR Addons](https://developer.lightbend.com/docs/akka-commercial-addons/current/gdpr/index.html)
+Pekko Persistence DynamoDB 1.0.0 is based on Akka Persistence DynamoDB 1.1.2. Pekko came about as a result of Lightbend’s decision to make future Akka releases under a [Business Software License](https://www.lightbend.com/blog/why-we-are-changing-the-license-for-akka), a license that is not compatible with Open Source usage.
 
-Schema changes are required in order to support async serializers as we need to know what data deserializer to use for the data payload.
-The data payload is stored in a dedicated `event` field. Going towards similar schema as [akka-persistence-cassandra](https://github.com/akka/akka-persistence-cassandra)
+Apache Pekko has changed the package names, among other changes. Config names have changed to use `pekko` instead of `akka` in their names. Users switching from Akka to Pekko should read our [Migration Guide](https://pekko.apache.org/docs/pekko/1.0/project/migration-guides.html).
 
-*Journal Plugin*
-~~~
-val Event = "event" -> PeristentRepr.payload
-val SerializerId = "ev_ser_id" -> Serializer id used for serializing event above
-val SerializerManifest = "ev_ser_manifest" -> Serializer manifest of the event above
-val Manifest = "manifest" -> String manifest used for whole PeristentRepr
+Generally, we have tried to make it as easy as possible to switch existing Akka based projects over to using Pekko.
 
-~~~
+We have gone through the code base and have tried to properly acknowledge all third party source code in the Apache Pekko code base. If anyone believes that there are any instances of third party source code that is not properly acknowledged, please get in touch.
 
-*Snapshot Plugin*
-~~~
-val SerializerId = "ser_id" -> Serializer used for serializing the snapshot payload
-val SerializerManifest = "ser_manifest" -> String manifest of the snapshot payload
-val PayloadData = "pay_data" -> the actual serialized data of the snapshot, need to distinguish between the old a new format
-~~~
-The existence of the old `val Payload = "pay"` field triggers old serialization. The new serialization doesn't Serialize theq
-Snapshot wrapper class.
+### Changes
 
-
-Both Journal and Snapshot checks the existence of new data fields first and switches the behaviour in order
-to make the change backwards compatible.
+* We have made some minor dependency upgrades, notably the AWS libs ([PR](https://github.com/apache/pekko-persistence-dynamodb/pull/84)).
+* We added support for Scala 3.3.0+.

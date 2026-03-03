@@ -1,61 +1,35 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * license agreements; and to You under the Apache License, version 2.0:
+ *
+ *   https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * This file is part of the Apache Pekko project, which was derived from Akka.
+ */
+
 /**
  * Copyright (C) 2009-2015 Typesafe Inc. <http://www.typesafe.com>
  */
-package akka
+package org.apache.pekko
 
 import sbt._
 import sbt.Keys._
-import java.io.File
-import sbtrelease.ReleasePlugin.autoImport.releasePublishArtifactsAction
+import org.mdedetrich.apache.sonatype.ApacheSonatypePlugin
+import sbtdynver.DynVerPlugin
+import sbtdynver.DynVerPlugin.autoImport.dynverSonatypeSnapshots
 
 object Publish extends AutoPlugin {
 
-  val defaultPublishTo = settingKey[File]("Default publish directory")
-
-  override def trigger  = allRequirements
-  override def requires = sbtrelease.ReleasePlugin
+  override def trigger = allRequirements
+  override def requires = ApacheSonatypePlugin && DynVerPlugin
 
   override lazy val projectSettings = Seq(
-    crossPaths := false,
-    pomExtra := akkaPomExtra,
-    publishTo := akkaPublishTo.value,
-    credentials ++= akkaCredentials,
-    organization := "com.typesafe.akka",
-    organizationName := "Typesafe Inc.",
-    organizationHomepage := Some(url("http://www.typesafe.com")),
-    licenses := Seq(("Apache License, Version 2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))),
-    homepage := Some(url("https://github.com/akka/akka-persistence-dynamodb")),
-    publishMavenStyle := true,
-    pomIncludeRepository := { x => false },
-    defaultPublishTo := crossTarget.value / "repository")
+    homepage := Some(url("https://github.com/apache/pekko-persistence-dynamodb")),
+    developers += Developer("contributors",
+      "Contributors",
+      "dev@pekko.apache.org",
+      url("https://github.com/apache/pekko-persistence-dynamodb/graphs/contributors")))
 
-  def akkaPomExtra = {
-    <developers>
-      <developer>
-        <id>contributors</id>
-        <name>Contributors</name>
-        <email>akka-dev@googlegroups.com</email>
-        <url>https://github.com/akka/akka-persistence-dynamodb/graphs/contributors</url>
-      </developer>
-    </developers>
-  }
-
-  private def akkaPublishTo =
-    Def.setting {
-      sonatypeRepo(version.value).orElse(localRepo(defaultPublishTo.value))
-    }
-
-  private def sonatypeRepo(version: String): Option[Resolver] =
-    Option(sys.props("publish.maven.central")).filter(_.toLowerCase == "true").map { _ =>
-      val nexus = "https://oss.sonatype.org/"
-      if (version.endsWith("-SNAPSHOT")) "snapshots".at(nexus + "content/repositories/snapshots")
-      else "releases".at(nexus + "service/local/staging/deploy/maven2")
-    }
-
-  private def localRepo(repository: File) =
-    Some(Resolver.file("Default Local Repository", repository))
-
-  private def akkaCredentials: Seq[Credentials] =
-    Option(System.getProperty("akka.publish.credentials", null)).map(f => Credentials(new File(f))).toSeq
-
+  override lazy val buildSettings = Seq(
+    dynverSonatypeSnapshots := true)
 }

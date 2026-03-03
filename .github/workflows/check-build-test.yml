@@ -10,19 +10,16 @@ on:
       - 1.1.x
     tags-ignore: [ v.* ]
 
-env:
-  AKKA_TEST_TIMEFACTOR: 10.0
-  EVENT_NAME: ${{ github.event_name }}
-
 jobs:
   check-code-compilation:
     name: Check Code Compilation
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
+          fetch-tags: true
 
       - name: Checkout GitHub merge
         if: github.event.pull_request
@@ -30,37 +27,38 @@ jobs:
           git fetch origin pull/${{ github.event.pull_request.number }}/merge:scratch
           git checkout scratch
 
-      - name: Set up JDK 11
-        uses: olafurpg/setup-scala@v10
+      - name: Setup Java 17
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
-          java-version: adopt@1.11.0-9
+          distribution: temurin
+          java-version: 17
+    
+      - name: Install sbt
+        uses: sbt/setup-sbt@1cad58d595b729a71ca2254cdf5b43dd6f42d4bb # v1.1.18
+
 
       - name: Cache Coursier cache
-        uses: coursier/cache-action@v5
+        uses: coursier/cache-action@e47d7d35a0d3a2c7f649ca5c63dfc2bbfaa002e7 # v8.0.1
 
       - name: Compile all code with default compiler
-        run: sbt Test/compile
-
-      - name: Format check
-        run: sbt scalafmtCheckAll
+        run: sbt "Test/compile"
 
   test:
     name: Build and Test
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     needs: [check-code-compilation]
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { java-version: adopt@1.8,      scala-version: 2.12.13, sbt-opts: '' }
-          - { java-version: adopt@1.8,      scala-version: 2.13.5, sbt-opts: '' }
-          - { java-version: adopt@1.11.0-9, scala-version: 2.12.13,  sbt-opts: '-J-XX:+UnlockExperimentalVMOptions -J-XX:+UseJVMCICompiler' }
-          - { java-version: adopt@1.11.0-9, scala-version: 2.13.5, sbt-opts: '-J-XX:+UnlockExperimentalVMOptions -J-XX:+UseJVMCICompiler' }
+          - { java-version: 17,  scala-version: 2.13, sbt-opts: '' }
+          - { java-version: 17,  scala-version: 3.3, sbt-opts: '' }
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
+          fetch-tags: true
 
       - name: Checkout GitHub merge
         if: github.event.pull_request
@@ -68,13 +66,18 @@ jobs:
           git fetch origin pull/${{ github.event.pull_request.number }}/merge:scratch
           git checkout scratch
 
-      - name: Setup Scala with Java ${{ matrix.java-version }}
-        uses: olafurpg/setup-scala@v10
+      - name: Setup Java ${{ matrix.java-version }}
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
+          distribution: temurin
           java-version: ${{ matrix.java-version }}
 
+      - name: Install sbt
+        uses: sbt/setup-sbt@1cad58d595b729a71ca2254cdf5b43dd6f42d4bb # v1.1.18
+          
+
       - name: Cache Coursier cache
-        uses: coursier/cache-action@v5
+        uses: coursier/cache-action@e47d7d35a0d3a2c7f649ca5c63dfc2bbfaa002e7 # v8.0.1
 
       - name: Run tests with Scala ${{ matrix.scala-version }} and Java ${{ matrix.java-version }}
         run: sbt "++${{ matrix.scala-version }} test" ${{ matrix.sbt-opts }}
