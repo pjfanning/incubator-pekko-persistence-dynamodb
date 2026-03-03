@@ -13,14 +13,15 @@
 
 package org.apache.pekko.persistence
 
-import java.nio.ByteBuffer
-import java.util.concurrent.Executors
+import java.net.URI
 import org.apache.pekko.actor.{ ActorSystem, Scheduler }
 import org.apache.pekko.event.{ Logging, LoggingAdapter }
 import org.apache.pekko.persistence.dynamodb.journal.DynamoDBHelper
-import com.amazonaws.auth.BasicAWSCredentials
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDBAsyncClient
-import com.amazonaws.services.dynamodbv2.model.{ AttributeValue, AttributeValueUpdate }
+import software.amazon.awssdk.auth.credentials.{ AwsBasicCredentials, StaticCredentialsProvider }
+import software.amazon.awssdk.core.SdkBytes
+import software.amazon.awssdk.regions.Region
+import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
+import software.amazon.awssdk.services.dynamodb.model.{ AttributeValue, AttributeValueUpdate }
 
 import java.util.{ Map => JMap }
 import scala.collection.BuildFrom
@@ -31,13 +32,13 @@ package object dynamodb {
   type Item = JMap[String, AttributeValue]
   type ItemUpdates = JMap[String, AttributeValueUpdate]
 
-  def S(value: String): AttributeValue = new AttributeValue().withS(value)
+  def S(value: String): AttributeValue = AttributeValue.fromS(value)
 
-  def N(value: Long): AttributeValue = new AttributeValue().withN(value.toString)
-  def N(value: String): AttributeValue = new AttributeValue().withN(value)
+  def N(value: Long): AttributeValue = AttributeValue.fromN(value.toString)
+  def N(value: String): AttributeValue = AttributeValue.fromN(value)
   val Naught = N(0)
 
-  def B(value: Array[Byte]): AttributeValue = new AttributeValue().withB(ByteBuffer.wrap(value))
+  def B(value: Array[Byte]): AttributeValue = AttributeValue.fromB(SdkBytes.fromByteArray(value))
 
   def lift[T](f: Future[T]): Future[Try[T]] = {
     val p = Promise[Try[T]]()
@@ -64,21 +65,39 @@ package object dynamodb {
     }.map(_.result())
 
   def dynamoClient(system: ActorSystem, settings: DynamoDBConfig): DynamoDBHelper = {
-    val client =
-      if (settings.AwsKey.nonEmpty && settings.AwsSecret.nonEmpty) {
-        val conns = settings.client.config.getMaxConnections
-        val executor = Executors.newFixedThreadPool(conns)
-        val creds = new BasicAWSCredentials(settings.AwsKey, settings.AwsSecret)
-        new AmazonDynamoDBAsyncClient(creds, settings.client.config, executor)
-      } else {
-        new AmazonDynamoDBAsyncClient(settings.client.config)
+    val builder = DynamoDbAsyncClient.builder()
+
+    if (settings.AwsKey.nonEmpty && settings.AwsSecret.nonEmpty) {
+      val creds = AwsBasicCredentials.create(settings.AwsKey, settings.AwsSecret)
+      builder.credentialsProvider(StaticCredentialsProvider.create(creds))
+    }
+
+    if (settings.Region.nonEmpty) {
+      try {
+        builder.region(Region.of(settings.Region))
+      } catch {
+        case e: IllegalArgumentException =>
+          throw new IllegalArgumentException(
+            s"Invalid AWS region '${settings.Region}' in configuration. " +
+            "See https://docs.aws.amazon.com/general/latest/gr/rande.html for valid region identifiers.",
+            e)
       }
-    client.setEndpoint(settings.Endpoint)
+    } else if (settings.Endpoint.nonEmpty) {
+      // When using a custom endpoint (e.g. DynamoDB Local), SDK v2 requires a region for
+      // request signing. Fall back to us-east-1 since the region is irrelevant for local endpoints.
+      builder.region(Region.US_EAST_1)
+    }
+
+    if (settings.Endpoint.nonEmpty) {
+      builder.endpointOverride(URI.create(settings.Endpoint))
+    }
+
+    val client = builder.build()
     val dispatcher = system.dispatchers.lookup(settings.ClientDispatcher)
 
     class DynamoDBClient(
         override val ec: ExecutionContext,
-        override val dynamoDB: AmazonDynamoDBAsyncClient,
+        override val dynamoDB: DynamoDbAsyncClient,
         override val settings: DynamoDBConfig,
         override val scheduler: Scheduler,
         override val log: LoggingAdapter)
